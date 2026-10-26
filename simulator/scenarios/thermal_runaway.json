@@ -1,0 +1,31 @@
+{
+  "scenario_name": "Thermal Runaway & Current Overload Cascade",
+  "description": "Simulates a cooling pump failure leading to simultaneous current spike and thermal runaway in server rack.",
+  "sequence": [
+    {
+      "step_sec": 5,
+      "node_id": "node_esp32_01",
+      "action": "INJECT",
+      "fault_type": "current_spike",
+      "parameters": {
+        "amps": 18.5
+      }
+    },
+    {
+      "step_sec": 10,
+      "node_id": "node_esp32_01",
+      "action": "INJECT",
+      "fault_type": "thermal_spike",
+      "parameters": {
+        "target_c": 72.0
+      }
+    },
+    {
+      "step_sec": 30,
+      "node_id": "node_esp32_01",
+      "action": "CLEAR",
+      "fault_type": "all",
+      "parameters": {}
+    }
+  ]
+}

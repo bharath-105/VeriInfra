@@ -1,0 +1,23 @@
+{
+  "scenario_name": "Faulty Temperature Sensor Flatline",
+  "description": "Simulates a failed temperature sensor stuck on 25.0 degrees C while current and vibration change.",
+  "sequence": [
+    {
+      "step_sec": 5,
+      "node_id": "node_esp32_01",
+      "action": "INJECT",
+      "fault_type": "flatline",
+      "parameters": {
+        "sensor": "temperature_c",
+        "value": 25.0
+      }
+    },
+    {
+      "step_sec": 25,
+      "node_id": "node_esp32_01",
+      "action": "CLEAR",
+      "fault_type": "all",
+      "parameters": {}
+    }
+  ]
+}

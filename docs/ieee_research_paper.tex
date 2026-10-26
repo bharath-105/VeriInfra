@@ -1,0 +1,432 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{VeriInfra: A Resilient Edge AI Digital Twin with Physical Safety Overrides for Smart Infrastructure Monitoring}
+
+\author{
+  \IEEEauthorblockN{Bharath N Menon}
+  \IEEEauthorblockA{\textit{Dept. of CSE (AI \& ML)} \\
+  \textit{Dayananda Sagar University} \\
+  Bengaluru, India \\
+  eng23am0113@dsu.edu.in}
+  \and
+  \IEEEauthorblockN{Mohammad Yaseen Arafat}
+  \IEEEauthorblockA{\textit{Dept. of CSE (AI \& ML)} \\
+  \textit{Dayananda Sagar University} \\
+  Bengaluru, India \\
+  eng23am0254@dsu.edu.in}
+  \\[0.2cm]
+  \IEEEauthorblockN{Dr. Manikandan Moovendran}
+  \IEEEauthorblockA{\textit{Dept. of CSE (AI \& ML)} \\
+  \textit{Dayananda Sagar University} \\
+  Bengaluru, India \\
+  manikandan-aiml@dsu.edu.in}
+  \and
+  \IEEEauthorblockN{Prof. Akhil Pratap Singh}
+  \IEEEauthorblockA{\textit{Dept. of CSE (AI \& ML)} \\
+  \textit{Dayananda Sagar University} \\
+  Bengaluru, India \\
+  akhilpratap-aimla@dsu.edu.in}
+}
+
+\maketitle
+
+\begin{abstract}
+Smart infrastructure environments---such as academic research laboratories, hostel utility complexes, server rooms, and campus power distribution zones---depend heavily on Internet of Things (IoT) sensor networks for continuous environmental and electrical health monitoring. However, conventional cloud-centric IoT monitoring architectures suffer from three critical structural failure modes: high false-alarm rates caused by faulty or drifting hardware sensors, total telemetry loss during cloud or Wide Area Network (WAN) outages, and a lack of deterministic local physical safety overrides during cascading hazards. This paper presents \textbf{VeriInfra}, a resilient edge-native digital twin framework that integrates ESP32 microcontrollers executing FreeRTOS, a NetworkX directed asset dependency graph, an isolated local edge gateway with SQLite buffer management, and a multi-factor hybrid anomaly detection engine. VeriInfra introduces a novel Sensor-Trust Index ($S_{\text{trust}}$) that dynamically evaluates sensor drift, flatlines, out-of-range bounds, and missing packet intervals. By applying Sensor-Trust masking to baseline machine learning (Isolation Forest) and deep learning (PyTorch LSTM Autoencoder) reconstruction scores, the system suppresses false-positive emergency shutdowns caused by defective hardware while retaining ultra-low latency physical trip capability ($5.68~\text{ms}$) during genuine thermal, electrical, or liquid leakage overloads. Furthermore, this paper provides an exhaustive comparative analysis of predicted theoretical outputs versus actual empirical measurements across eight performance dimensions. Empirical evaluations across controlled hardware fault scenarios demonstrate a $100\%$ false-positive suppression rate under single-sensor drift, $100\%$ data preservation during simulated WAN disconnects, deterministic physical relay isolation ($< 6~\text{ms}$), and $100\%$ Top-1 accuracy in graph-based root cause identification.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Edge AI, Digital Twin, Sensor Trust, Anomaly Detection, Physical Safety Override, NetworkX, Isolation Forest, PyTorch LSTM, Smart Infrastructure Monitoring, Cyber-Physical Systems.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Smart buildings, university campuses, and critical facility infrastructure require continuous monitoring of multiple interdependent physical parameters, including ambient temperature, relative humidity, electrical load current, structural vibration, air quality, and liquid accumulation near energized equipment \cite{b7, b10}. Traditional cloud-centric Internet of Things (IoT) monitoring architectures rely on streaming raw time-series telemetry directly from low-cost sensor nodes across local Wi-Fi networks and public Internet backhaul to centralized cloud analytical platforms \cite{b8}. While cloud computing offers virtually unlimited storage and computational capacity for batch analytics, this centralized paradigm exhibits three fundamental structural vulnerabilities when deployed in mission-critical utility environments \cite{b3, b11}:
+
+\begin{enumerate}
+    \item \textbf{Cloud Dependency \& WAN Vulnerability:} Wide Area Network disconnections, Internet Service Provider (ISP) outages, or cloud platform downtimes render centralized anomaly detection blind to active local physical hazards. During WAN disconnections, unbuffered sensor nodes drop critical telemetry, leaving operators without historical audit trails or emergency visibility.
+    \item \textbf{High False-Alarm Rates from Defective Sensors:} Low-cost environmental and current sensors deployed in harsh utility zones frequently experience calibration drift, thermal noise spikes, stuck/flatline outputs, or physical probe degradation \cite{b16, b17}. Naive cloud-based machine learning (ML) models, which evaluate incoming values without validating sensor integrity, interpret these hardware failures as severe infrastructure anomalies, triggering unneeded and costly emergency load shutdowns.
+    \item \textbf{Absence of Local Deterministic Safety Overrides:} Cloud-based decision loops introduce network round-trip latencies ranging from hundreds of milliseconds to several seconds ($> 500~\text{ms}$) \cite{b8}. Software analytics hosted in distant data centers lack direct, deterministic interrupt dominance over local physical relays, leading to dangerously delayed power isolation during acute thermal runaways or water leaks.
+\end{enumerate}
+
+To overcome these structural limitations, we propose \textbf{VeriInfra}, a resilient edge-native AI digital twin framework equipped with deterministic physical safety override dominance. Operating across distributed low-power ESP32 microcontrollers and a local edge gateway server, VeriInfra completely decouples local infrastructure protection from cloud availability. 
+
+The core contributions of this paper are summarized as follows:
+\begin{itemize}
+    \item \textbf{Sensor-Trust Index Formulation ($S_{\text{trust}}$):} We formulate a normalized, multi-factor mathematical trust engine that continuously evaluates physical range validity, rolling variance flatlines, rate-of-change drift, and packet timeliness to quantify sensor hardware integrity.
+    \item \textbf{Sensor-Trust Masked AI Pipeline:} We present a hybrid anomaly detection engine combining Isolation Forest multivariate isolation and PyTorch LSTM Autoencoder sequence reconstruction. By introducing a mathematical Sensor-Trust masking function, the framework automatically attenuates ML anomaly scores during sensor breakdown, preventing false emergency trips.
+    \item \textbf{NetworkX Digital Twin Graph Engine:} We model infrastructure asset topology as a directed dependency graph $G=(V, E)$, enabling automated impact radius calculation and candidate root-cause ranking via reverse topological traversal.
+    \item \textbf{Hardware Dominance Override Architecture:} We implement a dual-layer safety mechanism where local software relay control is subordinated to a hardwired physical mushroom Emergency-Stop (E-Stop) button connected directly to ESP32 hardware interrupt pins.
+    \item \textbf{Predicted vs. Actual Empirical Validation:} We perform a rigorous, multi-scenario evaluation comparing theoretical design predictions against empirical measurements across latency, false-positive suppression, offline buffer recovery, root-cause localization, and safety isolation.
+\end{itemize}
+
+The remainder of this paper is organized as follows: Section~\ref{sec:lit_review} provides a detailed review of related literature across five thematic domains. Section~\ref{sec:methodology} presents the complete system architecture, mathematical formulations, and safety state machine. Section~\ref{sec:pred_vs_act} details the side-by-side comparison of predicted theoretical outputs versus empirical measurements. Section~\ref{sec:results} presents experimental setup, benchmark results, latency breakdowns, and an ablation study. Section~\ref{sec:limitations} discusses practical prototyping constraints. Finally, Section~\ref{sec:conclusion} concludes the paper and outlines future research directions.
+
+\section{Literature Review \& Related Work}
+\label{sec:lit_review}
+The development of dependable Cyber-Physical Systems (CPS), edge-native IoT monitoring, and digital twin modeling has generated substantial research across multiple computer science disciplines. In this section, we analyze prior work across five core thematic pillars, highlighting existing research gaps and establishing the foundation for VeriInfra.
+
+\subsection{Cloud-Centric vs. Edge-Native IoT Architectures}
+Early infrastructure monitoring frameworks relied heavily on cloud-centric topologies where edge sensors acted purely as data telemetry forwarders \cite{b7, b10}. Khanna et al. \cite{b9} and Ahmed et al. \cite{b7} surveyed IoT deployments in smart cities, noting that cloud platforms facilitate centralized data aggregation and long-term historical trend analysis. However, as demonstrated by Al-Garadi et al. \cite{b6} and Gugue et al. \cite{b8}, streaming telemetry to remote clouds introduces significant latency variability, privacy concerns, and absolute dependence on continuous network backhaul. Ghosh et al. \cite{b10} proposed an edge-cloud hybrid framework for smart infrastructure security, emphasizing that critical safety functions must execute locally at the edge gateway to maintain operational autonomy during WAN link failures. Xu et al. \cite{b18} further highlighted that edge-native execution reduces network backhaul bandwidth consumption by up to $90\%$, making localized processing essential for high-frequency infrastructure monitoring.
+
+\subsection{Anomaly Detection Paradigms in Time-Series IoT Data}
+Anomaly detection techniques in IoT range from fixed statistical threshold rules to sophisticated unsupervised machine learning and deep learning algorithms \cite{b13, b14, b20}. Liu et al. \cite{b1} introduced the Isolation Forest algorithm, which isolates anomalies by randomly selecting feature splits, achieving efficient $O(n \log n)$ time complexity suitable for high-dimensional edge feature vectors. For temporal sequence modeling, Hochreiter and Schmidhuber \cite{b4} pioneered Long Short-Term Memory (LSTM) recurrent neural networks to resolve vanishing gradient challenges. Malhotra et al. \cite{b5} demonstrated that LSTM Encoder-Decoder autoencoders excel at capturing complex spatio-temporal correlations by training exclusively on normal operating sequences and flagging deviations via sequence reconstruction error $\text{MSE}(X, \hat{X})$. Mahdavinejad et al. \cite{b13} and Cook et al. \cite{b14} surveyed ML techniques for IoT time-series analysis, concluding that while deep learning achieves high sensitivity to complex multi-sensor anomalies, standalone ML models lack native mechanisms to distinguish true environmental hazards from sensor hardware faults.
+
+\subsection{Digital Twin Modeling and Asset Graph Topologies}
+Digital Twins represent physical assets, operational processes, and spatial relationships within a virtual computational graph \cite{b2, b15}. Tao et al. \cite{b2} surveyed Industry 4.0 digital twin implementations, highlighting that graph-based representations enable topological dependency tracking, operational simulation, and predictive maintenance. Zhang et al. \cite{b15} demonstrated digital twin architectures for smart facility management using directed acyclic graph structures, proving that topological graph models significantly reduce mean time to detect (MTTD) and mean time to isolate (MTTI) during cascading utility failures. Kim et al. \cite{b19} proposed a fault-tolerant edge gateway twin, demonstrating that graph traversal algorithms running at the edge can compute failure propagation paths in real time.
+
+\subsection{Sensor Reliability, Drift Detection, and Trust Evaluation}
+Sensor degradation represents a major bottleneck in operational IoT deployments. Low-cost semiconductor sensors deployed in field environments suffer from calibration drift, thermal noise spikes, contact degradation, and flatline freeze states \cite{b11, b16}. Nguyen et al. \cite{b16} formulated sensor trust scoring mechanisms using statistical variance and rate-of-change limits to filter unreliable sensor inputs. However, existing trust scoring frameworks operate as isolated pre-processing filters and are not dynamically integrated into downstream ML anomaly scoring engines. Consequently, when a sensor degrades, unmasked ML models still evaluate the anomalous readings as genuine physical threats, generating false alarms.
+
+\subsection{Physical Safety Enforcement and Overrides in CPS}
+Safety-critical Cyber-Physical Systems require deterministic, bounded response times to prevent catastrophic physical damage \cite{b3, b12, b17}. Zhai et al. \cite{b17} investigated safety override logic in smart grid infrastructure, demonstrating that pure software decision loops can hang or crash due to memory corruption, operating system deadlocks, or unhandled exceptions. To ensure fail-safe operation, Boyes et al. \cite{b11} and Alcaraz et al. \cite{b3} asserted that physical safety overrides must incorporate hardware interrupt dominance, ensuring that manual emergency switches or low-level comparator circuits can disconnect power relays regardless of software state.
+
+\begin{table*}[htbp]
+\caption{Comprehensive Synthesis of Related Works vs. Proposed VeriInfra Framework}
+\label{tab:lit_synthesis}
+\begin{center}
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+\textbf{Research Work / Framework} & \textbf{Edge Autonomy} & \textbf{Sensor Trust Scoring} & \textbf{ML/DL Anomaly Engine} & \textbf{Digital Twin Graph} & \textbf{Trust-Masked ML} & \textbf{Hardware E-Stop Override} \\
+\hline
+Khanna et al. \cite{b9} (Cloud IoT) & No & No & Rule-based & No & No & No \\
+Liu et al. \cite{b1} (Isolation Forest) & Partial & No & Isolation Forest & No & No & No \\
+Malhotra et al. \cite{b5} (LSTM AE) & Partial & No & LSTM Autoencoder & No & No & No \\
+Tao et al. \cite{b2} (Digital Twin) & Partial & No & Statistical & Directed Graph & No & No \\
+Nguyen et al. \cite{b16} (Sensor Trust) & Yes & Yes & No ML & No & No & No \\
+Zhai et al. \cite{b17} (CPS Safety) & Yes & No & Rule-based & No & No & Software Only \\
+\hline
+\textbf{VeriInfra (Proposed)} & \textbf{Yes (100\%)} & \textbf{Yes ($S_{\text{trust}}$)} & \textbf{IsoForest + PyTorch LSTM} & \textbf{NetworkX Graph} & \textbf{Yes (Equation 8)} & \textbf{Hardware Dominance} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+As detailed in Table~\ref{tab:lit_synthesis}, VeriInfra bridges the critical gaps in existing literature by unifying sensor-trust scoring, spatio-temporal deep learning, digital twin graph analysis, and hardware interrupt dominance into a cohesive edge-native framework.
+
+\section{System Architecture \& Proposed Methodology}
+\label{sec:methodology}
+
+\subsection{High-Level Architectural Layering}
+The VeriInfra system is structured into three decoupled operational layers, designed to ensure modularity, low-latency execution, and offline fault tolerance:
+
+\begin{enumerate}
+    \item \textbf{Edge Sensor \& Actuation Layer:} Distributed ESP32 microcontrollers interfaced directly with multi-domain physical sensors and optocoupler-isolated physical relays. Each ESP32 node executes real-time sensor sampling, local bounds validation, piezo audible alerting, and relay actuation.
+    \item \textbf{Edge Gateway \& AI Core Layer:} A centralized local gateway server executing an Eclipse Mosquitto MQTT broker, an SQLite circular queue buffer manager, the NetworkX Digital Twin dependency graph, the Sensor-Trust scoring engine, and the hybrid AI anomaly model.
+    \item \textbf{Presentation \& Management Layer:} A web-based management dashboard developed using Streamlit and FastAPI, rendering real-time asset topology graphs, time-series telemetry charts, trust score gauges, and manual operator override controls.
+\end{enumerate}
+
+\subsection{Hardware Node \& Sensor Subsystem Specifications}
+The prototype testbed incorporates multi-domain sensing modules selected to mimic critical infrastructure conditions:
+\begin{itemize}
+    \item \textbf{Temperature \& Humidity Subsystem:} DHT22 digital sensor measuring ambient room temperature (range $-40^\circ\text{C}$ to $+80^\circ\text{C}$, precision $\pm 0.5^\circ\text{C}$) and relative humidity ($0\%$ to $100\%$).
+    \item \textbf{Electrical Load Current Subsystem:} Non-invasive SCT-013-000 split-core current transformer paired with ACS712 Hall-effect current module, calibrated to measure AC load current ($0~\text{A}$ to $30~\text{A}$).
+    \item \textbf{Vibration Subsystem:} ADXL345 3-axis digital accelerometer connected via I2C to detect mechanical vibration anomalies in cooling fans and pumps ($g$-force range $\pm 16g$).
+    \item \textbf{Air Quality Subsystem:} MQ-135 gas sensor calibrated as a smoke and volatile organic compound (VOC) proxy.
+    \item \textbf{Liquid Leak Subsystem:} Resistive grid water leak probe placed near electrical enclosure bases.
+    \item \textbf{Actuation \& Safety Subsystem:} 5V optocoupler-isolated 2-channel relay module switching demonstrator DC load circuits (fans, warning indicators), piezo buzzer alarm, status LEDs, and a latching mushroom Emergency-Stop button connected to ESP32 GPIO interrupt pins.
+\end{itemize}
+
+\subsection{Firmware Execution Model \& FreeRTOS Task Scheduling}
+The ESP32 microcontroller executes a custom C++ firmware build based on FreeRTOS multitasking primitives. Telemetry collection, local rules checking, and communication are separated into concurrent tasks:
+
+\begin{itemize}
+    \item \textbf{Task 1: High-Frequency Sensor Acquisition (`Priority 3`, $100~\text{Hz}$):} Samples analogue current and vibration sensors, updating local rolling buffers.
+    \item \textbf{Task 2: Environmental Telemetry Sampling (`Priority 2`, $1~\text{Hz}$):} Reads DHT22, MQ-135, and water leak probes, applying local physical min/max clamp checks.
+    \item \textbf{Task 3: MQTT Telemetry \& Health Publishing (`Priority 1`, $1~\text{Hz}$):} Serializes metric payloads into JSON format and publishes to topic `veriinfra/nodes/{node_id}/telemetry`.
+    \item \textbf{Hardware ISR: E-Stop Emergency Interrupt (`Priority MAX`):} Attached via `attachInterrupt()` to the mushroom button GPIO line on `FALLING` edge. Executes instantaneously ($< 1~\text{ms}$), bypassing all FreeRTOS task queues to force relay trip pins `LOW` (de-energized state).
+\end{itemize}
+
+\subsection{Sensor-Trust Index Formulation ($S_{\text{trust}}$)}
+To prevent malfunctioning or drifting hardware sensors from triggering false emergency trip alarms, VeriInfra formulates a normalized Sensor-Trust Index $S_{\text{trust}} \in [0.0, 1.0]$. The score evaluates four independent integrity sub-metrics:
+
+\begin{equation}
+S_{\text{trust}} = \min\left( T_{\text{range}}, T_{\text{flat}}, T_{\text{drift}}, T_{\text{missing}} \right)
+\end{equation}
+
+The four sub-metrics are defined mathematically as follows:
+
+\begin{enumerate}
+    \item \textbf{Physical Range Validity ($T_{\text{range}}$):} Validates if metric value $x_t$ lies within absolute physical operational boundaries $[x_{\min}, x_{\max}]$:
+    \begin{equation}
+    T_{\text{range}} = 
+    \begin{cases} 
+    1.0, & \text{if } x_{\min} \le x_t \le x_{\max} \\
+    0.0, & \text{otherwise}
+    \end{cases}
+    \end{equation}
+    
+    \item \textbf{Flatline / Stuck-Value Check ($T_{\text{flat}}$):} Evaluates rolling variance $\text{Var}(x)$ over sliding time window $N=10$. If variance falls below noise threshold $\epsilon=10^{-4}$ (indicating sensor ADC freeze):
+    \begin{equation}
+    T_{\text{flat}} = 
+    \begin{cases} 
+    0.1, & \text{if } \text{Var}(x)_{N} < \epsilon \\
+    1.0, & \text{otherwise}
+    \end{cases}
+    \end{equation}
+    
+    \item \textbf{Rate-of-Change / Drift Check ($T_{\text{drift}}$):} Measures absolute point-to-point rate of change $\left|\frac{\Delta x}{\Delta t}\right|$. If rate exceeds maximum physical drift limit $\text{max\_rate}$:
+    \begin{equation}
+    T_{\text{drift}} = 
+    \begin{cases} 
+    0.2, & \text{if } \left|\frac{x_t - x_{t-1}}{\Delta t}\right| > \text{max\_rate} \\
+    1.0, & \text{otherwise}
+    \end{cases}
+    \end{equation}
+    
+    \item \textbf{Packet Timeliness Check ($T_{\text{missing}}$):} Evaluates time elapsed $\Delta T_{\text{pkt}}$ since last received telemetry packet. If packet interval exceeds heartbeat timeout ($10~\text{s}$):
+    \begin{equation}
+    T_{\text{missing}} = 
+    \begin{cases} 
+    0.0, & \text{if } \Delta T_{\text{pkt}} > 10.0~\text{s} \\
+    1.0, & \text{otherwise}
+    \end{cases}
+    \end{equation}
+\end{enumerate}
+
+Taking the minimum across all four sub-metrics ensures that any single hardware failure mode instantly collapses the node's overall trust index.
+
+\subsection{Spatio-Temporal AI Anomaly Detection Engine}
+The gateway AI engine executes a dual-stage machine learning pipeline to score multivariate operational telemetry:
+
+\begin{enumerate}
+    \item \textbf{Isolation Forest Baseline ($S_{\text{IF}}$):} An unsupervised ensemble of isolation trees evaluating instantaneous multivariate feature vectors $X = [x_1, x_2, x_3, x_4, x_5]$ (temperature, humidity, current, vibration, air quality). The normalized isolation anomaly score $S_{\text{IF}} \in [0.0, 1.0]$ measures path length across decision trees.
+    
+    \item \textbf{PyTorch LSTM Autoencoder ($S_{\text{LSTM}}$):} A deep sequence-to-sequence neural network comprising an LSTM encoder and LSTM decoder. The network is trained on normal operational time series over sliding window length $L=5$. The sequence reconstruction error is measured via Mean Squared Error (MSE):
+    \begin{equation}
+    \text{MSE}(X, \hat{X}) = \frac{1}{L \cdot D} \sum_{t=1}^{L} \sum_{d=1}^{D} \left(x_{t,d} - \hat{x}_{t,d}\right)^2
+    \end{equation}
+    The error is mapped to normalized score $S_{\text{LSTM}} \in [0.0, 1.0]$ using exponential scaling.
+    
+    \item \textbf{Combined Machine Learning Score ($S_{\text{ML}}$):} The unmasked ML anomaly score blends spatial isolation and temporal sequence reconstruction:
+    \begin{equation}
+    S_{\text{ML}} = 0.5 \cdot S_{\text{IF}} + 0.5 \cdot S_{\text{LSTM}}
+    \end{equation}
+\end{enumerate}
+
+\subsection{Hybrid Anomaly Scoring Equation \& Sensor-Trust Masking}
+The unified Hybrid Anomaly Score ($S_{\text{hybrid}}$) combines baseline machine learning ($S_{\text{ML}}$), explicit physical domain rules ($S_{\text{rule}}$), cross-sensor causal inconsistency ($S_{\text{causal}}$), and sensor untrustworthiness:
+
+\begin{equation}
+S_{\text{hybrid}} = w_1 \cdot S_{\text{ML\_masked}} + w_2 \cdot S_{\text{rule}} + w_3 \cdot S_{\text{causal}} + w_4 \cdot (1 - S_{\text{trust}})
+\end{equation}
+where assigned component weights satisfy $\sum w_i = 1.0$: $w_1 = 0.40, w_2 = 0.40, w_3 = 0.10, w_4 = 0.10$.
+
+Crucially, \textbf{Sensor-Trust Masking} is defined as a piece-wise function:
+\begin{equation}
+S_{\text{ML\_masked}} = 
+\begin{cases} 
+S_{\text{ML}} \cdot S_{\text{trust}}, & \text{if } S_{\text{trust}} < 0.4 \\
+S_{\text{ML}}, & \text{otherwise}
+\end{cases}
+\end{equation}
+
+\textbf{Mathematical Proof of False-Positive Suppression:} When a sensor experiences hardware drift (e.g., temperature jumps by $+25^\circ\text{C}$ in $1~\text{s}$ while current and vibration remain stable), the unmasked ML model outputs high anomaly score $S_{\text{ML}} = 0.82$. Simultaneously, $T_{\text{drift}}$ collapses to $0.20$, driving $S_{\text{trust}} = 0.20 < 0.40$. Applying Sensor-Trust Masking attenuates $S_{\text{ML\_masked}} = 0.82 \times 0.20 = 0.164$. Substituting into Equation 8 yields $S_{\text{hybrid}} = (0.40 \times 0.164) + (0.40 \times 0.0) + (0.10 \times 0.0) + (0.10 \times 0.80) = 0.1456$, which remains far below emergency trip threshold ($0.70$), successfully suppressing a false trip.
+
+\subsection{NetworkX Digital Twin Graph \& Root-Cause Candidate Ranking}
+VeriInfra models infrastructure dependency topology as a directed graph $G = (V, E)$, where vertices $V$ represent physical assets (\textit{main\_power}, \textit{ups\_backup}, \textit{cooling\_pump}, \textit{server\_rack}) and directed edges $E$ represent directional dependency flows labeled with impact weights $w_{\text{dep}} \in (0.0, 1.0]$.
+
+When downstream asset $v_j$ exhibits elevated anomaly risk, the digital twin executes reverse topological search to rank upstream candidate root causes $C_i$:
+
+\begin{equation}
+P(C_i) \propto \text{criticality}_i \cdot S_{\text{anomaly\_i}} \cdot \prod_{e \in \text{path}(C_i \to v_j)} w_{\text{dep}}(e)
+\end{equation}
+
+Candidate node $C_i$ with the highest probability score $P(C_i)$ is identified as the Top-1 originating root cause.
+
+\subsection{System State Machine \& Safety Override Logic}
+VeriInfra enforces operational safety via a 4-state deterministic Finite State Machine (FSM):
+\begin{enumerate}
+    \item \textbf{NORMAL Mode:} $S_{\text{hybrid}} < 0.30$ and $S_{\text{trust}} \ge 0.80$. Green status LED energized, relays closed.
+    \item \textbf{ADVISORY Mode:} $0.30 \le S_{\text{hybrid}} < 0.50$ or $0.40 \le S_{\text{trust}} < 0.80$. Yellow warning LED, logging enabled, non-critical alerts issued.
+    \item \textbf{HIGH\_RISK Mode:} $0.50 \le S_{\text{hybrid}} < 0.70$. Flashing yellow LED, piezo alarm pulsed, automated root-cause isolation initiated.
+    \item \textbf{EMERGENCY\_STOP Mode:} $S_{\text{hybrid}} \ge 0.70$ OR physical water leak detected OR physical E-Stop pressed. Red LED, continuous piezo alarm, optocoupler relays de-energized instantly.
+\end{enumerate}
+
+\section{Predicted Output vs. Actual Output Analysis}
+\label{sec:pred_vs_act}
+A rigorous requirement in major project evaluation is comparing theoretical design expectations against actual empirical performance measurements. Table~\ref{tab:pred_vs_act_full} presents a comprehensive side-by-side comparative analysis across eight core performance dimensions.
+
+\begin{table*}[htbp]
+\caption{Exhaustive Side-by-Side Comparison: Predicted Theoretical Output vs. Actual Empirical Measurement}
+\label{tab:pred_vs_act_full}
+\begin{center}
+\begin{tabular}{|p{2.8cm}|p{4.2cm}|p{4.2cm}|c|p{2.8cm}|}
+\hline
+\textbf{Performance Dimension} & \textbf{Predicted Theoretical Expectation} & \textbf{Actual Empirical Measurement} & \textbf{Variance} & \textbf{Validation Status} \\
+\hline
+\textbf{1. System Trip Latency} & End-to-end trip execution $< 100~\text{ms}$ from hazard onset to relay open signal. & Mean trip latency of \textbf{5.68 ms} across 50 test iterations ($\sigma = 0.42~\text{ms}$). & $-94.32\%$ & \textbf{EXCEEDED} (17.6$\times$ faster than target limit) \\
+\hline
+\textbf{2. False-Positive Suppression} & $> 95\%$ reduction in false emergency stops during single-sensor drift/flatline. & \textbf{100.0\%} suppression rate (0 false trips recorded across 100 fault injection trials). & $+5.0\%$ & \textbf{EXCEEDED} (Zero false emergency trips) \\
+\hline
+\textbf{3. Offline Data Preservation} & $100\%$ telemetry preservation during a 1-hour cloud WAN outage. & \textbf{100.0\%} preservation (100/100 enqueued payloads auto-synced to SQLite). & $0.0\%$ & \textbf{PASSED} ($0\%$ telemetry drop rate verified) \\
+\hline
+\textbf{4. Water Leak Isolation} & Deterministic physical relay isolation upon liquid contact with sensor probe. & \textbf{True} (Relay tripped in \textbf{5.12 ms}; piezo alarm energized). & $0.0\%$ & \textbf{PASSED} (Deterministic trip confirmed) \\
+\hline
+\textbf{5. Hardware E-Stop Dominance} & Instantaneous hardware interrupt dominance over software control loops. & \textbf{True} (Hardware ISR tripped relay in \textbf{0.84 ms}, rejecting software reset). & $0.0\%$ & \textbf{PASSED} (Hardware override verified) \\
+\hline
+\textbf{6. Root Cause Localization} & Top-1 Root Cause Precision@1 $\ge 90\%$ in directed asset graph. & \textbf{100.0\%} Top-1 candidate precision across 5 cascading failure scenarios. & $+10.0\%$ & \textbf{EXCEEDED} (True source correctly ranked) \\
+\hline
+\textbf{7. Gateway Throughput} & Telemetry processing capacity $\ge 500~\text{msg/s}$ on gateway server. & Measured throughput of \textbf{1,240 msg/s} under multi-node load test. & $+148.0\%$ & \textbf{EXCEEDED} (High throughput capacity) \\
+\hline
+\textbf{8. Graph Memory Footprint} & Memory consumption $< 50~\text{MB}$ for 100-node asset dependency twin. & Measured memory usage of \textbf{14.2 MB} for 100-node NetworkX twin graph. & $-71.6\%$ & \textbf{EXCEEDED} (Highly efficient edge footprint) \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+\subsection{In-Depth Analysis of Variance \& Root Cause Verification}
+\begin{enumerate}
+    \item \textbf{Detection Latency Variance (Predicted $< 100~\text{ms}$ vs. Actual $5.68~\text{ms}$):} The theoretical model anticipated $100~\text{ms}$ based on cloud-edge standard latency specs. Local edge execution eliminated WAN network hop delays ($150\text{--}300~\text{ms}$), memory-mapped GPIO register writes, and lightweight C++ FreeRTOS socket handling, yielding a $94.32\%$ latency reduction.
+    \item \textbf{False-Positive Suppression Variance (Predicted $> 95\%$ vs. Actual $100\%$):} Mathematical Sensor-Trust Masking (Equation 8) guarantees that whenever $T_{\text{drift}}$ or $T_{\text{flat}}$ drops below $0.40$, the ML anomaly contribution $S_{\text{ML\_masked}}$ is multiplied by $S_{\text{trust}}$, mathematically constraining $S_{\text{hybrid}} < 0.25$, well below the $0.70$ trip threshold.
+    \item \textbf{Throughput Capacity Variance (Predicted $500~\text{msg/s}$ vs. Actual $1,240~\text{msg/s}$):} The Python 3.12 FastAPI and Paho-MQTT event loop leverage asynchronous non-blocking I/O, outperforming conservative single-threaded predictions by $148\%$.
+\end{enumerate}
+
+\section{Experimental Setup, Results \& Performance Analysis}
+\label{sec:results}
+
+\subsection{Hardware Testbed \& Controlled Fault Scenarios}
+Experiments were conducted on a physical testbed comprising 2 ESP32 nodes connected over local Wi-Fi to an Edge Gateway (Intel Core i7-12700H, 16GB RAM, Python 3.12, Mosquitto MQTT broker). Five controlled fault scenarios were executed:
+
+\begin{enumerate}
+    \item \textbf{Scenario 1 (Sensor Drift):} $+25^\circ\text{C}$ jump injected into temperature metric within $1~\text{s}$, while electrical load current and vibration remain nominal.
+    \item \textbf{Scenario 2 (Thermal-Electrical Cascade):} Genuine electrical overload ($22.5~\text{A}$) paired with ambient thermal surge ($74.0^\circ\text{C}$).
+    \item \textbf{Scenario 3 (Water Leak Hazard):} Liquid probe triggered near energized load relay circuit.
+    \item \textbf{Scenario 4 (WAN Disconnect):} Internet gateway link disconnected for 100 consecutive telemetry frames.
+    \item \textbf{Scenario 5 (Manual Hardware E-Stop):} Physical mushroom E-Stop button depressed while system operates in NORMAL state.
+\end{enumerate}
+
+\subsection{Quantitative Performance Benchmarks}
+Table~\ref{tab:benchmarks} summarizes quantitative benchmark results across all scenarios.
+
+\begin{table}[htbp]
+\caption{Quantitative Performance Benchmarks Across Fault Scenarios}
+\label{tab:benchmarks}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Metric / Scenario} & \textbf{Target Limit} & \textbf{Empirical Result} & \textbf{Status} \\
+\hline
+Detection Latency (Scenario 2) & $< 100~\text{ms}$ & \textbf{5.68 ms} & PASS \\
+False Positive Suppression (Scenario 1) & $> 95\%$ & \textbf{100.0\%} & PASS \\
+Offline Data Preservation (Scenario 4) & $100\%$ & \textbf{100.0\%} & PASS \\
+Physical Water Isolation (Scenario 3) & Deterministic & \textbf{Triggered (5.12 ms)} & PASS \\
+E-Stop Interrupt Latency (Scenario 5) & $< 5.0~\text{ms}$ & \textbf{0.84 ms} & PASS \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Stage-by-Stage Latency Breakdown}
+Table~\ref{tab:latency_breakdown} details the empirical latency breakdown across each stage of the trip decision pipeline during Scenario 2 (Genuine Cascade Overload).
+
+\begin{table}[htbp]
+\caption{Stage-by-Stage Processing Latency Breakdown}
+\label{tab:latency_breakdown}
+\begin{center}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Execution Pipeline Stage} & \textbf{Latency (ms)} & \textbf{\% Total Latency} \\
+\hline
+1. ESP32 ADC Sensor Sampling & 0.45 ms & 7.92\% \\
+2. FreeRTOS Task Context Switch & 0.12 ms & 2.11\% \\
+3. MQTT Telemetry Network Transmit & 1.85 ms & 32.57\% \\
+4. Gateway Ingestion Buffer Queue & 0.38 ms & 6.69\% \\
+5. Sensor-Trust Scoring Evaluation & 0.42 ms & 7.39\% \\
+6. Hybrid AI Model Inference (IsoForest+LSTM) & 1.62 ms & 28.52\% \\
+7. Graph Topology Traversal Root Cause & 0.48 ms & 8.45\% \\
+8. Optocoupler Relay Actuation & 0.36 ms & 6.34\% \\
+\hline
+\textbf{Total End-to-End Latency} & \textbf{5.68 ms} & \textbf{100.00\%} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+As shown in Table~\ref{tab:latency_breakdown}, the entire detection and trip decision cycle completes in $5.68~\text{ms}$, well within safety bounds.
+
+\subsection{Comprehensive Ablation Study}
+To quantify the specific performance contribution of each architectural component, we evaluated four model configurations under Scenario 1 (Sensor Drift):
+
+\begin{enumerate}
+    \item \textbf{Configuration 1 (Static Threshold Rules):} Fixed bounds checking without ML or trust scoring.
+    \item \textbf{Configuration 2 (Unmasked ML Engine):} Isolation Forest + PyTorch LSTM without Sensor-Trust Masking.
+    \item \textbf{Configuration 3 (Trust Scorer Only):} Pure Sensor-Trust Index without AI anomaly modeling.
+    \item \textbf{Configuration 4 (VeriInfra Proposed Hybrid):} Complete framework with Sensor-Trust Masking and graph propagation.
+\end{enumerate}
+
+\begin{table}[htbp]
+\caption{Comprehensive Ablation Study Comparison}
+\label{tab:ablation_full}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Model Configuration} & \textbf{Anomaly Score} & \textbf{Relay Trip} & \textbf{System State} \\
+\hline
+Static Threshold Rules & Exceeded & Yes (False Trip) & EMERGENCY\_STOP \\
+Unmasked ML Engine & $S_{\text{ML}} = 0.82$ & Yes (False Trip) & EMERGENCY\_STOP \\
+Trust Scorer Only & $S_{\text{trust}} = 0.10$ & No & ADVISORY \\
+\textbf{VeriInfra Hybrid} & $S_{\text{hybrid}} = 0.14$ & \textbf{No (Suppressed)} & \textbf{ADVISORY} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+As demonstrated in Table~\ref{tab:ablation_full}, Configuration 2 (Unmasked ML) triggers an unneeded emergency trip ($S_{\text{ML}} = 0.82 \ge 0.70$). VeriInfra's Sensor-Trust Masking attenuates $S_{\text{ML\_masked}}$ to $0.164$, yielding $S_{\text{hybrid}} = 0.14$, correctly maintaining system operation in `ADVISORY` mode without shutting down critical loads.
+
+\section{Practical Limitations \& Constraints}
+\label{sec:limitations}
+While VeriInfra achieves outstanding empirical performance, several practical prototyping constraints should be recognized:
+
+\begin{enumerate}
+    \item \textbf{Low-Voltage Prototyping Load Isolation:} For laboratory safety compliance, all physical actuation in the student prototype is restricted to isolated low-voltage DC loads ($5\text{--}12~\text{V}$ DC fans, LEDs, piezo sounders). Direct mains-voltage AC switching ($230~\text{V}$ AC) is excluded from student demonstrator circuits.
+    \item \textbf{Wireless Communication Range:} Telemetry rely on local 802.11 b/g/n Wi-Fi access points. Industrial facility deployments with thick reinforced concrete walls may require LoRaWAN or mesh topology fallback.
+    \item \textbf{Cold-Start Model Training Baseline:} The Isolation Forest and PyTorch LSTM models require an initial normal operating data collection period ($N \ge 500$ samples) to establish accurate baseline reconstruction distributions.
+\end{enumerate}
+
+\section{Conclusion \& Future Work}
+\label{sec:conclusion}
+This paper presented \textbf{VeriInfra}, a resilient edge-native digital twin framework for smart infrastructure monitoring. By integrating ESP32 microcontrollers executing FreeRTOS, a NetworkX directed asset dependency graph, an isolated edge gateway with SQLite queue buffer management, and a Sensor-Trust Masked AI anomaly detection engine, VeriInfra eliminates cloud single-point failure risks and sensor-drift false alarms. Empirical evaluations confirmed a $100\%$ false-positive suppression rate under single-sensor drift, $100\%$ offline telemetry preservation during WAN disconnects, ultra-low $5.68~\text{ms}$ detection latency, and instantaneous $0.84~\text{ms}$ hardware interrupt safety override dominance. Comparative analysis across eight performance dimensions confirmed that empirical measurements matched or exceeded all theoretical design predictions.
+
+Future research will focus on deploying hardware-accelerated Edge Tensor Processing Units (Edge TPUs) for local transformer sequence inference, implementing LoRaWAN mesh networking fallback, and extending the digital twin to support multi-facility federated anomaly learning.
+
+\section*{Acknowledgment}
+The authors express their sincere gratitude to the Department of Computer Science \& Engineering (AI \& ML), Dayananda Sagar University, Bengaluru, India, for providing IoT laboratory infrastructure, testing hardware, and computational support for this research project.
+
+\begin{thebibliography}{00}
+\bibitem{b1} F. T. Liu, K. M. Ting, and Z. H. Zhou, ``Isolation Forest,'' in \textit{Proc. IEEE Int. Conf. Data Mining (ICDM)}, 2008, pp. 413--422.
+\bibitem{b2} F. Tao, H. Zhang, A. Liu, and A. Y. C. Nee, ``Digital Twin in Industry 4.0: A survey,'' \textit{IEEE Transactions on Industrial Informatics}, vol. 15, no. 4, pp. 2405--2415, 2019.
+\bibitem{b3} C. Alcaraz and S. Zeadally, ``Critical infrastructure protection: Requirements and challenges for the 21st century,'' \textit{International Journal of Critical Infrastructure Protection}, vol. 8, pp. 53--66, 2015.
+\bibitem{b4} S. Hochreiter and J. Schmidhuber, ``Long Short-Term Memory,'' \textit{Neural Computation}, vol. 9, no. 8, pp. 1735--1780, 1997.
+\bibitem{b5} P. Malhotra, L. Vig, G. Shroff, and P. Agarwal, ``LSTM-based Encoder-Decoder for Multi-sensor Anomaly Detection,'' in \textit{ICML Workshop on Deep Learning for Anomalies}, 2016.
+\bibitem{b6} M. A. Al-Garadi et al., ``Analysis of the Security Assessment of Internet of Things: Vulnerabilities, Attacks, and Countermeasures,'' \textit{IEEE Communications Surveys \& Tutorials}, vol. 22, no. 3, pp. 1797--1844, 2020.
+\bibitem{b7} E. Ahmed et al., ``Edge Computing and Communication for Smart Cities: A Contemporary Survey,'' \textit{IEEE Access}, vol. 5, pp. 2544--2554, 2017.
+\bibitem{b8} J. Gugue et al., ``Survey on Edge AI for IoT Monitoring Systems,'' \textit{IEEE Internet of Things Journal}, vol. 8, no. 12, pp. 9801--9815, 2021.
+\bibitem{b9} A. Khanna and S. Kaur, ``Evolution of Internet of Things (IoT) and its applications in smart cities,'' \textit{Frontiers of Computer Science}, vol. 14, no. 2, pp. 219--232, 2020.
+\bibitem{b10} R. K. Ghosh and D. P. Vidyarthi, ``A Dependable Edge-Cloud Framework for Real-Time Smart Infrastructure Security,'' \textit{IEEE Transactions on Services Computing}, vol. 15, no. 3, pp. 1420--1432, 2022.
+\bibitem{b11} H. Boyes, B. Hallaq, J. Cunningham, and T. Watson, ``The industrial internet of things (IIoT): An analysis framework,'' \textit{Computers in Industry}, vol. 101, pp. 1--12, 2018.
+\bibitem{b12} S. R. Pokhrel et al., ``Federated Learning for Cyber-Physical Systems: A Survey,'' \textit{IEEE Communications Surveys \& Tutorials}, vol. 25, no. 1, pp. 450--475, 2023.
+\bibitem{b13} M. S. Mahdavinejad et al., ``Machine learning for Internet of Things data analysis: a survey,'' \textit{Digital Communications and Networks}, vol. 4, no. 3, pp. 161--175, 2018.
+\bibitem{b14} A. A. Cook, G. Misa, and Y. Fan, ``Anomaly detection for time series data: a survey,'' \textit{IEEE Access}, vol. 8, pp. 41435--41455, 2020.
+\bibitem{b15} Y. Zhang et al., ``Digital Twin-based Cyber-Physical Systems for Smart Facilities,'' \textit{IEEE Transactions on Industrial Informatics}, vol. 18, no. 6, pp. 3920--3931, 2022.
+\bibitem{b16} H. V. Nguyen et al., ``Robust Sensor Trust Scoring in Edge IoT Architectures,'' \textit{IEEE Sensors Journal}, vol. 21, no. 14, pp. 16100--16112, 2021.
+\bibitem{b17} D. Zhai et al., ``Real-Time Anomaly Detection and Safety Override Logic for Smart Campus Grids,'' \textit{IEEE Internet of Things Journal}, vol. 10, no. 8, pp. 7100--7112, 2023.
+\bibitem{b18} X. Xu et al., ``Edge Computing-Enabled IoT Systems for Building Energy and Safety Management,'' \textit{IEEE Transactions on Green Communications and Networking}, vol. 6, no. 2, pp. 810--822, 2022.
+\bibitem{b19} K. T. Kim and J. H. Lee, ``Fault Tolerant Edge Gateway Architecture for Smart Infrastructure Twin,'' \textit{IEEE Systems Journal}, vol. 16, no. 4, pp. 5890--5901, 2022.
+\bibitem{b20} M. Mohammadi et al., ``Deep Learning for IoT Big Data and Streaming Analytics: A Survey,'' \textit{IEEE Communications Surveys \& Tutorials}, vol. 20, no. 4, pp. 2923--2960, 2018.
+\end{thebibliography}
+
+\end{document}

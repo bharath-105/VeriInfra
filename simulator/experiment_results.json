@@ -1,0 +1,47 @@
+{
+  "timestamp": 1789640645.5828624,
+  "benchmarks": {
+    "detection_latency_ms": 5.68,
+    "false_positive_suppression_pct": 100.0,
+    "offline_data_preservation_pct": 100.0,
+    "ablation_study": {
+      "ml_only_false_trips": 1,
+      "hybrid_model_false_trips": 0,
+      "suppression_gain_pct": 100.0
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "Scenario 1: Faulty Sensor Drift",
+      "sensor_trust_score": 1.0,
+      "status_flag": "OK",
+      "s_ml_raw": 0.473,
+      "s_ml_masked": 0.473,
+      "s_hybrid": 0.189,
+      "ml_only_false_trip": false,
+      "hybrid_should_trip": false,
+      "false_positive_suppressed": true
+    },
+    {
+      "scenario": "Scenario 2: Thermal & Current Cascade",
+      "detection_latency_ms": 5.68,
+      "s_hybrid": 0.735,
+      "system_mode": "EMERGENCY_STOP",
+      "relay_tripped": true,
+      "violated_rules_count": 1
+    },
+    {
+      "scenario": "Scenario 3: Water Leak Hazard",
+      "s_rule": 1.0,
+      "s_hybrid": 0.614,
+      "relay_tripped": true,
+      "rule_violation": "CRITICAL: Water leak detected while main electrical load is ENERGIZED."
+    },
+    {
+      "scenario": "Scenario 4: Network Outage Buffering",
+      "enqueued_during_outage": 100,
+      "remaining_after_sync": 0,
+      "data_preservation_rate_pct": 100.0
+    }
+  ]
+}
